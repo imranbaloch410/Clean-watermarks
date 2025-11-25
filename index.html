@@ -693,3 +693,703 @@
         function renderWatermarkRegions() {
             // Clear existing overlays
             document.querySelectorAll('.watermark-overlay').forEach(el => el.remove());
+            
+            // Draw regions
+            state.watermarkRegions.forEach((region, index) => {
+                const overlay = document.createElement('div');
+                overlay.className = 'watermark-overlay';
+                overlay.style.left = `${region.x * 100}%`;
+                overlay.style.top = `${region.y * 100}%`;
+                overlay.style.width = `${region.w * 100}%`;
+                overlay.style.height = `${region.h * 100}%`;
+                overlay.dataset.index = index;
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.innerHTML = '×';
+                removeBtn.className = 'absolute -top-2 -right-2 w-4 h-4 bg-red-500 text-white text-xs rounded-full';
+                removeBtn.onclick = () => {
+                    state.watermarkRegions.splice(index, 1);
+                    renderWatermarkRegions();
+                    updateUI();
+                };
+                
+                overlay.appendChild(removeBtn);
+                elements.previewContainer.appendChild(overlay);
+            });
+            
+            elements.detectedCount.textContent = state.watermarkRegions.length;
+        }
+
+        async function autoRemoveWatermarks() {
+            if (!state.selectedId || !state.sourceImage) return;
+            
+            elements.processingOverlay.classList.remove('hidden');
+            elements.processingText.textContent = 'Detecting watermarks...';
+            
+            try {
+                // Detect watermarks
+                const regions = detectWatermarks(state.sourceImage, state.detectionSensitivity);
+                state.watermarkRegions = [...regions];
+                
+                renderWatermarkRegions();
+                updateUI();
+                
+                if (regions.length > 0) {
+                    showToast(`Detected ${regions.length} potential watermark regions`, 'info');
+                    
+                    // Reprocess with watermark removal
+                    elements.processingText.textContent = 'Removing watermarks...';
+                    await updatePreview();
+                    
+                    showToast('Watermarks removed successfully', 'success');
+                    elements.watermarkBadge.classList.remove('hidden');
+                } else {
+                    showToast('No watermarks detected', 'info');
+                    elements.watermarkBadge.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Watermark removal failed:', error);
+                showToast('Failed to process image', 'error');
+            }
+            
+            elements.processingOverlay.classList.add('hidden');
+        }
+
+        // ============ METADATA GENERATION (Local - No API) ============
+        const TITLE_TEMPLATES = [
+            "🔥 {adjective} {subject} You Won't Believe!",
+            "😱 The Most {adjective} {subject} Ever Captured",
+            "✨ Stunning {subject} - {adjective} Moments",
+            "🌟 {adjective} {subject} That Will Blow Your Mind",
+            "📸 Incredible {subject} - Must See {adjective} Shots",
+            "🎬 {adjective} {subject} Compilation - Best of 2024",
+            "💫 Breathtaking {subject} - {adjective} Photography",
+            "🏆 Top {adjective} {subject} Moments Caught on Camera"
+        ];
+        
+        const ADJECTIVES = [
+            "Amazing", "Stunning", "Incredible", "Breathtaking", "Epic",
+            "Mesmerizing", "Spectacular", "Magnificent", "Extraordinary", "Phenomenal",
+            "Captivating", "Awe-Inspiring", "Remarkable", "Sensational", "Majestic"
+        ];
+        
+        const SUBJECTS = [
+            "Nature", "Wildlife", "Landscapes", "Moments", "Views",
+            "Scenery", "Photography", "Captures", "Shots", "Visuals",
+            "Images", "Pictures", "Frames", "Compositions", "Art"
+        ];
+        
+        const DESCRIPTION_TEMPLATES = [
+            "Discover the beauty of this {adjective} capture that showcases the incredible world around us. This stunning visual will leave you speechless.\n\nDon't forget to like, subscribe, and hit the bell for more amazing content!",
+            "Experience the magic of this {adjective} moment frozen in time. Every detail tells a story of nature's incredible artistry.\n\n👉 Subscribe for daily inspiration and stunning visuals!",
+            "Witness the extraordinary beauty captured in this {adjective} image. From composition to colors, every element is perfectly balanced.\n\n🔔 Turn on notifications to never miss our latest uploads!"
+        ];
+        
+        const HASHTAG_POOLS = [
+            ["photography", "photooftheday", "picoftheday", "instagood", "beautiful"],
+            ["nature", "naturephotography", "landscape", "wildlife", "earthpix"],
+            ["travel", "wanderlust", "adventure", "explore", "travelgram"],
+            ["art", "artistic", "creative", "visualart", "composition"],
+            ["stunning", "amazing", "incredible", "breathtaking", "epic"],
+            ["viral", "trending", "fyp", "foryou", "discover"],
+            ["youtube", "youtuber", "subscribe", "video", "content"],
+            ["4k", "8k", "hdr", "highquality", "professional"]
+        ];
+
+        let metadataCache = new Map();
+
+        function generateMetadata() {
+            const adjective = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+            const subject = SUBJECTS[Math.floor(Math.random() * SUBJECTS.length)];
+            
+            const titleTemplate = TITLE_TEMPLATES[Math.floor(Math.random() * TITLE_TEMPLATES.length)];
+            const title = titleTemplate.replace('{adjective}', adjective).replace('{subject}', subject);
+            
+            const descTemplate = DESCRIPTION_TEMPLATES[Math.floor(Math.random() * DESCRIPTION_TEMPLATES.length)];
+            const description = descTemplate.replace('{adjective}', adjective.toLowerCase());
+            
+            const hashtags = [];
+            HASHTAG_POOLS.forEach(pool => {
+                const shuffled = [...pool].sort(() => Math.random() - 0.5);
+                hashtags.push(...shuffled.slice(0, 2));
+            });
+            
+            const finalHashtags = hashtags.sort(() => Math.random() - 0.5).slice(0, 15);
+            
+            const metadata = { title, description, hashtags: finalHashtags };
+            
+            const cacheKey = `${adjective}-${subject}`;
+            metadataCache.set(cacheKey, metadata);
+            if (metadataCache.size > 50) {
+                const firstKey = metadataCache.keys().next().value;
+                metadataCache.delete(firstKey);
+            }
+            
+            return metadata;
+        }
+
+        // ============ UI UPDATES ============
+        function updateUI() {
+            elements.queueCount.textContent = `${state.batchItems.length}/${MAX_BATCH_SIZE}`;
+            elements.imageCount.textContent = `${state.batchItems.length} / ${MAX_BATCH_SIZE} images`;
+            
+            if (state.batchItems.length >= MAX_BATCH_SIZE) {
+                elements.imageCount.className = 'text-xs mr-2 hidden sm:block text-amber-400 font-semibold';
+            } else {
+                elements.imageCount.className = 'text-xs mr-2 hidden sm:block text-gray-400';
+            }
+            
+            if (state.batchItems.length > 0) {
+                elements.downloadAllBtn.classList.remove('hidden');
+                elements.downloadAllBtn.classList.add('flex');
+            } else {
+                elements.downloadAllBtn.classList.add('hidden');
+                elements.downloadAllBtn.classList.remove('flex');
+            }
+            
+            renderBatchList();
+            updatePreview();
+            
+            if (state.selectedId) {
+                elements.controlsPanel.classList.remove('hidden');
+                elements.metadataPlaceholder.classList.add('hidden');
+                elements.metadataContent.classList.remove('hidden');
+            } else {
+                elements.controlsPanel.classList.add('hidden');
+                elements.metadataPlaceholder.classList.remove('hidden');
+                elements.metadataContent.classList.add('hidden');
+            }
+            
+            // Update preset buttons
+            if (state.outputPreset === 'ULTRA_8K') {
+                elements.preset8k.className = 'px-3 py-1.5 text-xs font-medium rounded-md transition-all bg-gray-700 text-white shadow-sm';
+                elements.presetYT.className = 'px-3 py-1.5 text-xs font-medium rounded-md transition-all text-gray-400 hover:text-gray-200';
+            } else {
+                elements.presetYT.className = 'px-3 py-1.5 text-xs font-medium rounded-md transition-all bg-red-600/90 text-white shadow-sm';
+                elements.preset8k.className = 'px-3 py-1.5 text-xs font-medium rounded-md transition-all text-gray-400 hover:text-gray-200';
+            }
+            
+            // Update fit mode buttons
+            document.querySelectorAll('.fit-btn').forEach(btn => {
+                btn.className = 'fit-btn px-3 py-1.5 text-xs rounded-lg transition-all bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200';
+            });
+            
+            if (state.fitMode === FIT_MODES.CONTAIN_BLUR) {
+                elements.fitBlur.className = 'fit-btn px-3 py-1.5 text-xs rounded-lg transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-900/50';
+            } else if (state.fitMode === FIT_MODES.CONTAIN_BLACK) {
+                elements.fitBlack.className = 'fit-btn px-3 py-1.5 text-xs rounded-lg transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-900/50';
+            } else if (state.fitMode === FIT_MODES.COVER) {
+                elements.fitCrop.className = 'fit-btn px-3 py-1.5 text-xs rounded-lg transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-900/50';
+            }
+            
+            // Update enhance button
+            if (state.enhanceQuality) {
+                elements.enhanceBtn.className = 'px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-orange-900/50 ring-1 ring-orange-400/50';
+            } else {
+                elements.enhanceBtn.className = 'px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-2 bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200';
+            }
+            
+            // Update batch enhance toggle
+            if (state.batchEnhance) {
+                elements.batchEnhanceToggle.className = 'w-8 h-4 rounded-full p-0.5 transition-colors bg-indigo-500 cursor-pointer';
+                elements.batchEnhanceKnob.className = 'w-3 h-3 bg-white rounded-full shadow-md transform transition-transform translate-x-4';
+                elements.batchEnhanceLabel.className = 'text-xs font-medium text-indigo-400';
+            } else {
+                elements.batchEnhanceToggle.className = 'w-8 h-4 rounded-full p-0.5 transition-colors bg-gray-700 cursor-pointer';
+                elements.batchEnhanceKnob.className = 'w-3 h-3 bg-white rounded-full shadow-md transform transition-transform translate-x-0';
+                elements.batchEnhanceLabel.className = 'text-xs font-medium text-gray-500 group-hover:text-gray-400';
+            }
+            
+            // Update watermark removal toggle
+            if (state.watermarkRemovalEnabled) {
+                elements.watermarkToggle.className = 'w-10 h-4 rounded-full p-0.5 transition-colors bg-red-500 cursor-pointer';
+                elements.watermarkKnob.className = 'w-3 h-3 bg-white rounded-full shadow-md transform transition-transform translate-x-6';
+                elements.watermarkLabel.className = 'text-xs font-medium text-red-400 hidden md:block';
+                elements.watermarkControls.classList.remove('hidden');
+                elements.watermarkBadge.classList.remove('hidden');
+            } else {
+                elements.watermarkToggle.className = 'w-10 h-4 rounded-full p-0.5 transition-colors bg-gray-700 cursor-pointer';
+                elements.watermarkKnob.className = 'w-3 h-3 bg-white rounded-full shadow-md transform transition-transform translate-x-0';
+                elements.watermarkLabel.className = 'text-xs font-medium text-gray-500 group-hover:text-gray-400 hidden md:block';
+                elements.watermarkControls.classList.add('hidden');
+                elements.watermarkBadge.classList.add('hidden');
+            }
+            
+            // Update manual selection mode
+            if (state.manualSelectionMode) {
+                elements.manualSelectBtn.className = 'px-3 py-1.5 text-xs rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors';
+                elements.watermarkCanvas.classList.remove('hidden');
+                if (state.selectedId) setupManualSelection();
+            } else {
+                elements.manualSelectBtn.className = 'px-3 py-1.5 text-xs rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 transition-colors';
+                elements.watermarkCanvas.classList.add('hidden');
+            }
+            
+            const { width, height } = PRESETS[state.outputPreset];
+            elements.dimensionBadge.textContent = `${width} x ${height}`;
+        }
+
+        function renderBatchList() {
+            if (state.batchItems.length === 0) {
+                elements.batchList.innerHTML = '<div class="text-center py-10 text-gray-600 text-sm p-2">No images. Add some to start.</div>';
+                return;
+            }
+            
+            elements.batchList.innerHTML = state.batchItems.map((item, idx) => `
+                <div class="batch-item group relative flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all ${
+                    state.selectedId === item.id 
+                    ? 'bg-indigo-900/30 border border-indigo-500/30 ring-1 ring-indigo-500/20' 
+                    : 'hover:bg-gray-800 border border-transparent'
+                }" data-id="${item.id}">
+                    <div class="w-16 h-9 bg-gray-950 rounded overflow-hidden shrink-0 relative">
+                        <img src="${item.previewUrl}" alt="thumb" class="w-full h-full object-cover" loading="lazy" />
+                        <div class="absolute top-0 right-0 bg-black/50 text-[8px] text-white px-1">${idx + 1}</div>
+                    </div>
+                    <div class="flex-1 min-w-0 hidden md:block">
+                        <p class="text-sm text-gray-200 truncate">${item.file.name}</p>
+                        <p class="text-[10px] text-gray-500">${(item.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
+                    <button class="remove-btn absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" data-id="${item.id}" title="Remove">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            `).join('');
+            
+            document.querySelectorAll('.batch-item').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    if (!e.target.closest('.remove-btn')) {
+                        selectItem(el.dataset.id);
+                    }
+                });
+            });
+            
+            document.querySelectorAll('.remove-btn').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeItem(el.dataset.id);
+                });
+            });
+        }
+
+        async function updatePreview() {
+            if (!state.selectedId || !state.sourceImage) {
+                elements.previewPlaceholder.classList.remove('hidden');
+                elements.previewImage.classList.add('hidden');
+                elements.dimensionBadge.classList.add('hidden');
+                elements.enhanceBadge.classList.add('hidden');
+                elements.watermarkBadge.classList.add('hidden');
+                return;
+            }
+            
+            elements.previewPlaceholder.classList.add('hidden');
+            elements.previewImage.classList.remove('hidden');
+            elements.dimensionBadge.classList.remove('hidden');
+            
+            if (state.enhanceQuality) {
+                elements.enhanceBadge.classList.remove('hidden');
+            } else {
+                elements.enhanceBadge.classList.add('hidden');
+            }
+            
+            if (state.watermarkRegions.length > 0) {
+                elements.watermarkBadge.classList.remove('hidden');
+            } else {
+                elements.watermarkBadge.classList.add('hidden');
+            }
+            
+            elements.processingOverlay.classList.remove('hidden');
+            elements.processingText.textContent = 'Processing...';
+            
+            try {
+                const dataUrl = processImage(state.sourceImage, state.fitMode, state.outputPreset, state.enhanceQuality, state.watermarkRegions);
+                state.processedDataUrl = dataUrl;
+                elements.previewImage.src = dataUrl;
+            } catch (e) {
+                console.error('Processing failed:', e);
+                showToast('Image processing failed', 'error');
+            }
+            
+            elements.processingOverlay.classList.add('hidden');
+        }
+
+        // ============ ACTIONS ============
+        function validateFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showToast(`${file.name} is not an image`, 'error');
+                return false;
+            }
+            if (file.size > MAX_FILE_SIZE) {
+                showToast(`${file.name} exceeds 50MB limit`, 'error');
+                return false;
+            }
+            return true;
+        }
+
+        async function addFiles(files) {
+            const filesArray = Array.from(files).filter(validateFile);
+            const remainingSlots = MAX_BATCH_SIZE - state.batchItems.length;
+            
+            if (remainingSlots <= 0) {
+                showToast(`Maximum ${MAX_BATCH_SIZE} images allowed`, 'error');
+                return;
+            }
+            
+            if (filesArray.length > remainingSlots) {
+                showToast(`Only ${remainingSlots} slots available`, 'warning');
+            }
+            
+            const itemsToAdd = filesArray.slice(0, remainingSlots);
+            
+            const newItems = itemsToAdd.map(file => ({
+                id: crypto.randomUUID(),
+                file,
+                previewUrl: URL.createObjectURL(file),
+                processedUrl: null,
+                status: 'pending'
+            }));
+            
+            state.batchItems = [...state.batchItems, ...newItems];
+            
+            if (!state.selectedId && newItems.length > 0) {
+                await selectItem(newItems[0].id);
+            } else {
+                updateUI();
+            }
+            
+            showToast(`Added ${newItems.length} image${newItems.length > 1 ? 's' : ''}`, 'success');
+        }
+
+        async function selectItem(id) {
+            state.selectedId = id;
+            const item = state.batchItems.find(i => i.id === id);
+            
+            if (item) {
+                try {
+                    state.sourceImage = await loadImage(item.previewUrl);
+                } catch (e) {
+                    console.error('Failed to load image:', e);
+                    showToast('Failed to load image', 'error');
+                    state.sourceImage = null;
+                }
+            }
+            
+            // Clear caches when switching images
+            state.processingCache.clear();
+            metadataCache.clear();
+            state.watermarkRegions = [];
+            state.manualSelectionMode = false;
+            
+            elements.metadataResults.classList.add('hidden');
+            elements.generateMetadataBtn.classList.remove('hidden');
+            elements.watermarkCanvas.classList.add('hidden');
+            
+            renderWatermarkRegions();
+            updateUI();
+            await updatePreview();
+        }
+
+        function removeItem(id) {
+            const item = state.batchItems.find(i => i.id === id);
+            if (item) {
+                URL.revokeObjectURL(item.previewUrl);
+            }
+            
+            state.batchItems = state.batchItems.filter(item => item.id !== id);
+            
+            if (id === state.selectedId) {
+                if (state.batchItems.length > 0) {
+                    selectItem(state.batchItems[0].id);
+                } else {
+                    state.selectedId = null;
+                    state.sourceImage = null;
+                    state.processedDataUrl = null;
+                    state.processingCache.clear();
+                    metadataCache.clear();
+                    state.watermarkRegions = [];
+                }
+            }
+            
+            updateUI();
+            showToast('Image removed', 'info');
+        }
+
+        function downloadCurrent() {
+            if (!state.processedDataUrl || !state.selectedId) return;
+            
+            const item = state.batchItems.find(i => i.id === state.selectedId);
+            if (!item) return;
+            
+            const link = document.createElement('a');
+            link.href = state.processedDataUrl;
+            
+            let suffix = '';
+            if (state.enhanceQuality) suffix += '-natgeo';
+            if (state.watermarkRegions.length > 0) suffix += '-clean';
+            if (state.outputPreset === 'ULTRA_8K') suffix += '-8k.jpg';
+            else suffix += '-thumbnail.jpg';
+            
+            const name = item.file.name.replace(/\.[^/.]+$/, "");
+            link.download = `${name}${suffix}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast('Download started', 'success');
+        }
+
+        async function downloadAll() {
+            if (state.batchItems.length === 0 || state.isZipping) return;
+            
+            state.isZipping = true;
+            const btn = elements.downloadAllBtn;
+            const originalContent = btn.innerHTML;
+            
+            const zip = new JSZip();
+            const folderName = state.outputPreset === 'ULTRA_8K' ? "framecraft-8k" : "framecraft-thumbnails";
+            const folder = zip.folder(folderName);
+            
+            let successCount = 0;
+            let failCount = 0;
+            
+            try {
+                for (let i = 0; i < state.batchItems.length; i++) {
+                    const item = state.batchItems[i];
+                    const progress = Math.round(((i + 1) / state.batchItems.length) * 100);
+                    
+                    btn.innerHTML = `
+                        <div class="spinner w-4 h-4 border-2"></div>
+                        <span class="hidden sm:inline">Processing ${i + 1}/${state.batchItems.length}</span>
+                        <span class="sm:hidden">${progress}%</span>
+                    `;
+                    
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    
+                    try {
+                        const img = await loadImage(item.previewUrl);
+                        const enhance = state.batchEnhance || state.enhanceQuality;
+                        // For batch, auto-detect watermarks if enabled
+                        let regions = [];
+                        if (state.watermarkRemovalEnabled) {
+                            regions = detectWatermarks(img, state.detectionSensitivity);
+                        }
+                        const blob = await processImageToBlob(img, state.fitMode, state.outputPreset, enhance, regions);
+                        
+                        let suffix = '';
+                        if (enhance) suffix += '-natgeo';
+                        if (regions.length > 0) suffix += '-clean';
+                        if (state.outputPreset === 'ULTRA_8K') suffix += '-8k.jpg';
+                        else suffix += '-thumbnail.jpg';
+                        
+                        const fileName = item.file.name.replace(/\.[^/.]+$/, "") + suffix;
+                        folder.file(fileName, blob);
+                        successCount++;
+                    } catch (err) {
+                        console.error(`Failed: ${item.file.name}`, err);
+                        failCount++;
+                    }
+                }
+                
+                if (failCount > 0) {
+                    showToast(`${failCount} images failed to process`, 'warning');
+                }
+                
+                btn.innerHTML = `
+                    <div class="spinner w-4 h-4 border-2"></div>
+                    <span>Generating ZIP...</span>
+                `;
+                
+                const content = await zip.generateAsync({ type: "blob" });
+                
+                const url = URL.createObjectURL(content);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `framecraft-batch-${Date.now()}.zip`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                showToast(`ZIP generated with ${successCount} images`, 'success');
+                
+            } catch (err) {
+                console.error("Batch processing failed", err);
+                showToast("Failed to process batch. Try fewer images.", 'error');
+            }
+            
+            state.isZipping = false;
+            btn.innerHTML = originalContent;
+        }
+
+        function handleGenerateMetadata() {
+            const metadata = generateMetadata();
+            
+            elements.generatedTitle.textContent = metadata.title;
+            elements.generatedDescription.textContent = metadata.description;
+            
+            state.currentHashtags = metadata.hashtags;
+            elements.generatedHashtags.innerHTML = metadata.hashtags.map(tag => `
+                <span class="px-2 py-1 bg-indigo-900/50 text-indigo-200 text-xs rounded-full border border-indigo-800/50">
+                    #${tag}
+                </span>
+            `).join('');
+            
+            elements.generateMetadataBtn.classList.add('hidden');
+            elements.metadataResults.classList.remove('hidden');
+        }
+
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Copied to clipboard', 'success');
+            }).catch(() => {
+                showToast('Copy failed', 'error');
+            });
+        }
+
+        // ============ EVENT LISTENERS ============
+        elements.addImagesBtn.addEventListener('click', () => elements.fileInput.click());
+        
+        elements.fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                addFiles(e.target.files);
+                e.target.value = '';
+            }
+        });
+        
+        elements.downloadAllBtn.addEventListener('click', downloadAll);
+        elements.downloadCurrentBtn.addEventListener('click', downloadCurrent);
+        
+        elements.preset8k.addEventListener('click', () => {
+            state.outputPreset = 'ULTRA_8K';
+            updateUI();
+            updatePreview();
+        });
+        
+        elements.presetYT.addEventListener('click', () => {
+            state.outputPreset = 'YT_THUMBNAIL';
+            updateUI();
+            updatePreview();
+        });
+        
+        elements.fitBlur.addEventListener('click', () => {
+            state.fitMode = FIT_MODES.CONTAIN_BLUR;
+            updateUI();
+            updatePreview();
+        });
+        
+        elements.fitBlack.addEventListener('click', () => {
+            state.fitMode = FIT_MODES.CONTAIN_BLACK;
+            updateUI();
+            updatePreview();
+        });
+        
+        elements.fitCrop.addEventListener('click', () => {
+            state.fitMode = FIT_MODES.COVER;
+            updateUI();
+            updatePreview();
+        });
+        
+        elements.enhanceBtn.addEventListener('click', () => {
+            state.enhanceQuality = !state.enhanceQuality;
+            updateUI();
+            updatePreview();
+        });
+        
+        elements.batchEnhanceToggle.addEventListener('click', () => {
+            state.batchEnhance = !state.batchEnhance;
+            updateUI();
+        });
+        
+        // Watermark toggle
+        elements.watermarkToggle.addEventListener('click', () => {
+            state.watermarkRemovalEnabled = !state.watermarkRemovalEnabled;
+            state.watermarkRegions = [];
+            state.manualSelectionMode = false;
+            renderWatermarkRegions();
+            updateUI();
+        });
+        
+        // Sensitivity slider
+        elements.sensitivitySlider.addEventListener('input', (e) => {
+            state.detectionSensitivity = parseInt(e.target.value);
+            elements.sensitivityValue.textContent = e.target.value;
+        });
+        
+        // Detect watermarks button
+        elements.detectWatermarksBtn.addEventListener('click', autoRemoveWatermarks);
+        
+        // Manual selection
+        elements.manualSelectBtn.addEventListener('click', () => {
+            state.manualSelectionMode = !state.manualSelectionMode;
+            if (state.manualSelectionMode) {
+                setupManualSelection();
+            }
+            updateUI();
+        });
+        
+        // Clear regions
+        elements.clearRegionsBtn.addEventListener('click', () => {
+            state.watermarkRegions = [];
+            renderWatermarkRegions();
+            updateUI();
+            elements.watermarkBadge.classList.add('hidden');
+        });
+        
+        // Remove watermark button
+        elements.removeWatermarkBtn.addEventListener('click', autoRemoveWatermarks);
+        
+        elements.generateMetadataBtn.addEventListener('click', handleGenerateMetadata);
+        elements.regenerateBtn.addEventListener('click', handleGenerateMetadata);
+        
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('copy-btn')) {
+                const targetId = e.target.dataset.target;
+                const text = document.getElementById(targetId).textContent;
+                copyText(text);
+            }
+        });
+        
+        elements.copyHashtagsBtn.addEventListener('click', () => {
+            const hashtagsText = state.currentHashtags.map(t => `#${t}`).join(' ');
+            copyText(hashtagsText);
+        });
+        
+        // Drag and Drop
+        elements.dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            elements.dropZone.classList.add('dragover');
+        });
+        
+        elements.dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            elements.dropZone.classList.remove('dragover');
+        });
+        
+        elements.dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            elements.dropZone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+                if (imageFiles.length > 0) {
+                    addFiles(imageFiles);
+                }
+            }
+        });
+        
+        // Prevent default drag behavior on window
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => e.preventDefault());
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            state.batchItems.forEach(item => URL.revokeObjectURL(item.previewUrl));
+            state.processingCache.clear();
+            metadataCache.clear();
+        });
+        
+        // Initial UI update
+        updateUI();
+    </script>
+</body>
+</html>
