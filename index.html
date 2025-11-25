@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -490,17 +491,20 @@
                     const w = Math.max(1, Math.min(targetW - x, region.w * targetW));
                     const h = Math.max(1, Math.min(targetH - y, region.h * targetH));
                     
-                    // Simple inpainting: blur the region
+                    // Fixed Inpainting Logic
                     ctx.save();
-                    ctx.filter = 'blur(20px)';
-                    const imageData = ctx.getImageData(x, y, w, h);
-                    ctx.putImageData(imageData, x, y);
-                    ctx.restore();
+                    ctx.beginPath();
+                    ctx.rect(x, y, w, h);
+                    ctx.clip();
                     
-                    // Alternative: clone neighboring pixels (more advanced)
-                    // For simplicity, we'll use a blur approach
-                    ctx.filter = 'blur(10px)';
-                    ctx.fillStyle = ctx.createPattern(source, 'no-repeat');
+                    // Heavy blur for the watermark area
+                    ctx.filter = 'blur(30px)'; 
+                    
+                    // Redraw the image portion into the clipped area
+                    // This ensures we blur the existing content
+                    ctx.drawImage(source, offsetX, offsetY, drawW, drawH);
+                    
+                    ctx.restore();
                 });
             }
             
