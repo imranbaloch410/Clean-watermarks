@@ -98,7 +98,9 @@ export const ProcessingControls: React.FC = () => {
 
   const progress = jobStatus?.progress ?? 0;
   const isComplete = jobStatus?.status === 'completed';
-  const hasFailed = jobStatus?.status === 'failed';
+  // hasFailed can be used for error display if needed
+  const _hasFailed = jobStatus?.status === 'failed';
+  void _hasFailed; // Suppress unused variable warning
 
   return (
     <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">

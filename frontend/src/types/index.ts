@@ -1,5 +1,23 @@
-// API Types
+// Fit modes for image processing
+export enum FitMode {
+  CONTAIN_BLUR = 'contain_blur',
+  CONTAIN_BLACK = 'contain_black',
+  COVER = 'cover',
+}
 
+// Output presets
+export enum OutputPreset {
+  ULTRA_8K = 'ultra_8k',
+  YT_THUMBNAIL = 'yt_thumbnail',
+}
+
+// Output dimensions
+export const OUTPUT_DIMENSIONS = {
+  [OutputPreset.ULTRA_8K]: { width: 7680, height: 4320 },
+  [OutputPreset.YT_THUMBNAIL]: { width: 1280, height: 720 },
+} as const;
+
+// Processing status
 export type ProcessingStatus = 
   | 'pending'
   | 'detecting'
@@ -7,6 +25,16 @@ export type ProcessingStatus =
   | 'completed'
   | 'failed';
 
+// Batch item for queue
+export interface BatchItem {
+  id: string;
+  file: File;
+  previewUrl: string;
+  processedUrl: string | null;
+  status: ProcessingStatus;
+}
+
+// Watermark region for manual selection
 export interface WatermarkRegion {
   x: number;
   y: number;
@@ -17,6 +45,7 @@ export interface WatermarkRegion {
   type: 'text' | 'logo' | 'pattern';
 }
 
+// Image task from API
 export interface ImageTask {
   id: string;
   filename: string;
@@ -30,6 +59,7 @@ export interface ImageTask {
   processing_time_ms?: number;
 }
 
+// Batch job from API
 export interface BatchJob {
   id: string;
   tasks: ImageTask[];
@@ -41,12 +71,14 @@ export interface BatchJob {
   completed_at?: string;
 }
 
+// Upload response from API
 export interface UploadResponse {
   job_id: string;
   total_images: number;
   message: string;
 }
 
+// Processing options
 export interface ProcessingOptions {
   auto_detect: boolean;
   detection_confidence: number;
@@ -57,6 +89,7 @@ export interface ProcessingOptions {
   manual_regions: WatermarkRegion[];
 }
 
+// Job status response from API
 export interface JobStatusResponse {
   job_id: string;
   status: ProcessingStatus;
@@ -68,6 +101,7 @@ export interface JobStatusResponse {
   download_ready: boolean;
 }
 
+// Health response from API
 export interface HealthResponse {
   status: string;
   version: string;
@@ -75,32 +109,34 @@ export interface HealthResponse {
   models_loaded: boolean;
 }
 
-// Frontend Types
-
-export interface UploadedFile {
-  id: string;
-  file: File;
-  preview: string;
-  status: ProcessingStatus;
-  taskId?: string;
-}
-
+// App state interface
 export interface AppState {
-  // Files
-  files: UploadedFile[];
-  selectedFileId: string | null;
+  // Batch items
+  batchItems: BatchItem[];
+  selectedId: string | null;
   
-  // Job
+  // Image processing
+  sourceImageObj: HTMLImageElement | null;
+  activeProcessedUrl: string | null;
+  
+  // Settings
+  fitMode: FitMode;
+  outputPreset: OutputPreset;
+  enhanceQuality: boolean;
+  batchCleanLogos: boolean;
+  
+  // UI State
+  isZipping: boolean;
+  isBatchCleaning: boolean;
+  zipProgress: number;
+  isCleaningSingle: boolean;
+  statusMessage: string;
+  showSettings: boolean;
+  
+  // API-based processing (legacy)
   currentJobId: string | null;
   jobStatus: JobStatusResponse | null;
-  
-  // Processing
   isUploading: boolean;
   isProcessing: boolean;
-  
-  // Options
   options: ProcessingOptions;
-  
-  // UI
-  showSettings: boolean;
 }

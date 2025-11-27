@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -60,6 +62,12 @@ body {
   }
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .animate-slide-in {
   animation: slide-in 0.3s ease-out forwards;
 }
@@ -70,6 +78,18 @@ body {
 
 .animate-pulse-glow {
   animation: pulse-glow 2s infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Spinner */
+.spinner {
+  border: 3px solid #374151;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 /* Drop zone styles */
@@ -126,4 +146,98 @@ body {
 
 .btn-danger {
   @apply px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* Toast notification */
+.toast {
+  animation: slide-in 0.3s ease-out forwards;
+}
+
+/* Watermark overlay */
+.watermark-overlay {
+  position: absolute;
+  border: 2px dashed #fbbf24;
+  background: rgba(251, 191, 36, 0.2);
+  pointer-events: none;
+}
+
+/* Custom selection */
+::selection {
+  @apply bg-indigo-500/30;
+}
+
+/* Glass effect */
+.glass {
+  @apply bg-gray-900/90 backdrop-blur-md;
+}
+
+/* Gradient text */
+.gradient-text {
+  @apply bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent;
+}
+
+/* Card styles */
+.card {
+  @apply bg-gray-900 rounded-xl border border-gray-800 shadow-xl;
+}
+
+/* Input styles */
+input[type="range"] {
+  @apply appearance-none bg-transparent cursor-pointer;
+}
+
+input[type="range"]::-webkit-slider-track {
+  @apply h-2 bg-gray-700 rounded-full;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  @apply appearance-none w-4 h-4 bg-indigo-500 rounded-full cursor-pointer -mt-1;
+}
+
+input[type="range"]::-moz-range-track {
+  @apply h-2 bg-gray-700 rounded-full;
+}
+
+input[type="range"]::-moz-range-thumb {
+  @apply w-4 h-4 bg-indigo-500 rounded-full cursor-pointer border-0;
+}
+
+/* Checkbox styles */
+input[type="checkbox"] {
+  @apply w-4 h-4 rounded bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-gray-900;
+}
+
+/* Focus styles */
+button:focus-visible,
+input:focus-visible {
+  @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-gray-900;
+}
+
+/* Transition utilities */
+.transition-smooth {
+  @apply transition-all duration-200 ease-out;
+}
+
+/* Dot pattern background */
+.dot-pattern {
+  background-image: radial-gradient(#fff 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Glow effects */
+.glow-indigo {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+.glow-purple {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+}
+
+/* Hover lift effect */
+.hover-lift {
+  @apply transition-transform duration-200;
+}
+
+.hover-lift:hover {
+  @apply -translate-y-0.5;
 }
